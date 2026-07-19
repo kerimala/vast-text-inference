@@ -6,6 +6,7 @@
   "container_image": "vllm/vllm-openai@sha256:3a1e7f5904e1a1192a02aa0086ceaffc33985d7044c7bb25b3a43d61bdbe3ac0",
   "container_platform": "linux/amd64",
   "disk_gb": 140,
+  "estimated_first_download_gb": 55,
   "max_hourly_usd": 0.75,
   "offer": {
     "gpu_names": [
@@ -29,5 +30,5 @@
     "gpu_memory_utilization": 0.86,
     "startup_timeout_minutes": 35
   },
-  "template_hash": null
+  "template_hash": "945c5e5cb0c9db64c853cfd3c2738652"
 }

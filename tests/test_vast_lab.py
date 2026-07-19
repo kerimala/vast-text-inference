@@ -15,12 +15,14 @@ class OfferValidationTests(unittest.TestCase):
         self.config = vast_lab.load_config(vast_lab.DEFAULT_CONFIG)
         self.offer = {
             "id": 42,
+            "machine_id": 7,
             "gpu_name": "A100 SXM4",
             "gpu_ram": 81920,
             "num_gpus": 1,
             "cpu_arch": "amd64",
             "reliability": 0.98,
             "inet_down": 1200,
+            "inet_down_cost": 0.01,
             "direct_port_count": 2,
             "disk_space": 500,
             "dph_total": 0.62,
@@ -41,6 +43,12 @@ class OfferValidationTests(unittest.TestCase):
     def test_wrong_gpu_is_rejected(self):
         self.offer["gpu_name"] = "RTX 5090"
         self.assertIn("GPU model is outside the allowlist", vast_lab.validate_offer(self.config, self.offer))
+
+    def test_quote_includes_first_model_download(self):
+        quote = vast_lab.cost_quote(self.config, self.offer, 120)
+        self.assertEqual(quote["estimated_rental_cost_usd"], 1.24)
+        self.assertEqual(quote["estimated_first_model_download_cost_usd"], 0.55)
+        self.assertEqual(quote["estimated_total_cost_usd"], 1.79)
 
 
 if __name__ == "__main__":

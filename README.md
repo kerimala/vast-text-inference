@@ -48,7 +48,9 @@ auf genau einer A100/A800 mit 80 GB VRAM.
 - Endpoint: nur Remote-Loopback `127.0.0.1:8000`, Zugriff per SSH-Tunnel
 - Vast-Disk: 140 GB
 - Preisgrenze: 0,75 USD/Stunde inklusive des von Vast berechneten Storage-Anteils
+- Kostenvoranschlag beruecksichtigt zusaetzlich 55 GB erstmaligen Modelldownload
 - Nicht verifizierte Hosts sind erlaubt, Zuverlaessigkeit muss mindestens 95 % betragen
+- Privates Vast-Template: `aeon-bf16-a100-80gb`
 
 NVFP4 ist fuer diese Baseline bewusst nicht gewaehlt: A100/A800 haben keine
 native FP4-Beschleunigung. Der vom Modellautor empfohlene AEON-Container ist
@@ -67,12 +69,14 @@ und Preisgrenze validiert.
 
 ## Deployment (kostenpflichtig, noch nicht ausfuehren)
 
-Nach Eintrag des privaten Vast-Template-Hashs in der Profil-Datei:
+Der private Vast-Template-Hash ist in der Profil-Datei hinterlegt:
 
 ```bash
-python3 scripts/vast_lab.py deploy OFFER_ID \
+python3 scripts/vast_lab.py quote MACHINE_ID --ttl-minutes 120
+
+python3 scripts/vast_lab.py deploy MACHINE_ID \
   --ttl-minutes 120 \
-  --confirm 'RENT OFFER_ID UP TO $BETRAG' \
+  --confirm 'RENT MACHINE MACHINE_ID UP TO $BETRAG' \
   --execute
 ```
 

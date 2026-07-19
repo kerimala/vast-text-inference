@@ -41,7 +41,7 @@ def vast_json(arguments: list[str]) -> Any:
         raise LabError(f"Vast CLI returned invalid JSON: {result.stdout[:300]}") from exc
 
 
-def offer_query(config: dict[str, Any], offer_id: int | None = None) -> str:
+def offer_query(config: dict[str, Any]) -> str:
     rules = config["offer"]
     comparisons = [
         "rentable=true",
@@ -53,20 +53,19 @@ def offer_query(config: dict[str, Any], offer_id: int | None = None) -> str:
         f"inet_down>={rules['inet_down_min_mbps']}",
         f"direct_port_count>={rules['direct_port_count_min']}",
         f"disk_space>={config['disk_gb']}",
+        f"dph<={config['max_hourly_usd']}",
     ]
     if rules["verified_required"]:
         comparisons.append("verified=true")
-    if offer_id is not None:
-        comparisons.append(f"id={offer_id}")
     return " ".join(comparisons)
 
 
-def fetch_offers(config: dict[str, Any], *, offer_id: int | None = None, limit: int = 50) -> list[dict[str, Any]]:
+def fetch_offers(config: dict[str, Any], *, machine_id: int | None = None, limit: int = 50) -> list[dict[str, Any]]:
     payload = vast_json(
         [
             "search",
             "offers",
-            offer_query(config, offer_id),
+            offer_query(config),
             "--no-default",
             "--storage",
             str(config["disk_gb"]),
@@ -78,7 +77,10 @@ def fetch_offers(config: dict[str, Any], *, offer_id: int | None = None, limit: 
     )
     if not isinstance(payload, list):
         raise LabError("Unexpected Vast offer response.")
-    return [offer for offer in payload if validate_offer(config, offer) == []]
+    valid = [offer for offer in payload if validate_offer(config, offer) == []]
+    if machine_id is not None:
+        valid = [offer for offer in valid if int(offer.get("machine_id", -1)) == machine_id]
+    return valid
 
 
 def hourly_price(offer: dict[str, Any]) -> float:
@@ -114,7 +116,8 @@ def validate_offer(config: dict[str, Any], offer: dict[str, Any]) -> list[str]:
 
 def public_offer(offer: dict[str, Any]) -> dict[str, Any]:
     return {
-        "id": offer.get("id"),
+        "offer_id": offer.get("id"),
+        "machine_id": offer.get("machine_id"),
         "gpu": offer.get("gpu_name"),
         "gpu_ram_mb": offer.get("gpu_ram"),
         "hourly_usd_with_storage": round(hourly_price(offer), 4),
@@ -213,6 +216,45 @@ def command_search(config: dict[str, Any], limit: int) -> int:
     return 0 if offers else 2
 
 
+def selected_offer(config: dict[str, Any], machine_id: int) -> dict[str, Any]:
+    # Offer IDs can rotate between searches. Select by stable machine ID, then
+    # use the fresh offer ID returned by the final pre-rental search.
+    offers = fetch_offers(config, machine_id=machine_id, limit=200)
+    if not offers:
+        raise LabError("The selected machine vanished or no longer satisfies the profile.")
+    return min(offers, key=hourly_price)
+
+
+def cost_quote(config: dict[str, Any], offer: dict[str, Any], ttl_minutes: int) -> dict[str, Any]:
+    rental_cost = hourly_price(offer) * ttl_minutes / 60
+    download_cost = float(offer.get("inet_down_cost") or 0) * config["estimated_first_download_gb"]
+    estimated_total = rental_cost + download_cost
+    return {
+        "ttl_minutes": ttl_minutes,
+        "estimated_rental_cost_usd": round(rental_cost, 2),
+        "estimated_first_model_download_cost_usd": round(download_cost, 2),
+        "estimated_total_cost_usd": round(estimated_total, 2),
+        "required_confirmation": f"RENT MACHINE {offer['machine_id']} UP TO ${estimated_total:.2f}",
+    }
+
+
+def command_quote(config: dict[str, Any], args: argparse.Namespace) -> int:
+    if args.ttl_minutes < 30 or args.ttl_minutes > 240:
+        raise LabError("TTL must be between 30 and 240 minutes.")
+    offer = selected_offer(config, args.machine_id)
+    quote = cost_quote(config, offer, args.ttl_minutes)
+    print(
+        json.dumps(
+            {
+                "offer": public_offer(offer),
+                **quote,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def command_deploy(config: dict[str, Any], args: argparse.Namespace) -> int:
     if not args.execute:
         raise LabError("Refusing paid action without --execute.")
@@ -223,23 +265,19 @@ def command_deploy(config: dict[str, Any], args: argparse.Namespace) -> int:
     if not config.get("template_hash"):
         raise LabError("No Vast template hash is recorded in the profile yet.")
 
-    offers = fetch_offers(config, offer_id=args.offer_id, limit=5)
-    if len(offers) != 1:
-        raise LabError("The selected offer vanished or no longer satisfies the profile.")
-    offer = offers[0]
-    price = hourly_price(offer)
-    max_cost = price * args.ttl_minutes / 60
-    expected = f"RENT {args.offer_id} UP TO ${max_cost:.2f}"
-    if args.confirm != expected:
-        raise LabError(f"Cost confirmation must exactly equal: {expected}")
+    offer = selected_offer(config, args.machine_id)
+    quote = cost_quote(config, offer, args.ttl_minutes)
+    if args.confirm != quote["required_confirmation"]:
+        raise LabError(f"Cost confirmation must exactly equal: {quote['required_confirmation']}")
 
     print(json.dumps(public_offer(offer), indent=2))
-    print(f"Hard TTL: {args.ttl_minutes} minutes; estimated upper rental cost: ${max_cost:.2f}")
+    print(json.dumps(quote, indent=2))
+    print("Local TTL guard will be armed immediately after creation.")
     created = vast_json(
         [
             "create",
             "instance",
-            str(args.offer_id),
+            str(offer["id"]),
             "--template_hash",
             str(config["template_hash"]),
             "--disk",
@@ -282,8 +320,12 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser = subparsers.add_parser("search", help="List matching offers without renting")
     search_parser.add_argument("--limit", type=int, default=20)
 
+    quote_parser = subparsers.add_parser("quote", help="Revalidate one offer and print its confirmation text")
+    quote_parser.add_argument("machine_id", type=int)
+    quote_parser.add_argument("--ttl-minutes", type=int, default=120)
+
     deploy_parser = subparsers.add_parser("deploy", help="Rent one revalidated offer with a hard TTL")
-    deploy_parser.add_argument("offer_id", type=int)
+    deploy_parser.add_argument("machine_id", type=int)
     deploy_parser.add_argument("--ttl-minutes", type=int, default=120)
     deploy_parser.add_argument("--confirm", required=True)
     deploy_parser.add_argument("--execute", action="store_true")
@@ -296,6 +338,8 @@ def main() -> int:
     try:
         if args.command == "search":
             return command_search(config, args.limit)
+        if args.command == "quote":
+            return command_quote(config, args)
         return command_deploy(config, args)
     except (LabError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
