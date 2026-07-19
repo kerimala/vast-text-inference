@@ -77,7 +77,7 @@ python3 scripts/vast_lab.py quote MACHINE_ID --ttl-minutes 120
 
 python3 scripts/vast_lab.py deploy MACHINE_ID \
   --ttl-minutes 120 \
-  --confirm 'RENT MACHINE MACHINE_ID UP TO $BETRAG' \
+  --confirm 'RENT MACHINE MACHINE_ID UP TO USD BETRAG' \
   --execute
 ```
 

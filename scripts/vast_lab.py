@@ -234,7 +234,7 @@ def cost_quote(config: dict[str, Any], offer: dict[str, Any], ttl_minutes: int) 
         "estimated_rental_cost_usd": round(rental_cost, 2),
         "estimated_first_model_download_cost_usd": round(download_cost, 2),
         "estimated_total_cost_usd": round(estimated_total, 2),
-        "required_confirmation": f"RENT MACHINE {offer['machine_id']} UP TO ${estimated_total:.2f}",
+        "required_confirmation": f"RENT MACHINE {offer['machine_id']} UP TO USD {estimated_total:.2f}",
     }
 
 
