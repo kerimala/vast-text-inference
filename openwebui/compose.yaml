@@ -11,6 +11,7 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       WEBUI_URL: http://localhost:3000
+      CORS_ALLOW_ORIGIN: http://localhost:3000
       ENABLE_SIGNUP: "true"
     volumes:
       - open-webui-data:/app/backend/data
