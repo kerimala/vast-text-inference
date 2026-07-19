@@ -38,10 +38,10 @@ def main() -> int:
             "model": args.model,
             "messages": [{"role": "user", "content": "Antworte nur mit dem Wort bereit."}],
             "temperature": 0,
-            "max_tokens": 32,
+            "max_tokens": 512,
         },
     )
-    content = chat["choices"][0]["message"].get("content", "")
+    content = chat["choices"][0]["message"].get("content") or ""
     if not content.strip():
         raise RuntimeError("Basic chat completion returned no text.")
 
@@ -66,7 +66,7 @@ def main() -> int:
             ],
             "tool_choice": {"type": "function", "function": {"name": "get_weather"}},
             "temperature": 0,
-            "max_tokens": 128,
+            "max_tokens": 1024,
         },
     )
     tool_calls = tool["choices"][0]["message"].get("tool_calls") or []

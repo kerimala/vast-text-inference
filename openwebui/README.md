@@ -19,4 +19,6 @@ curl --fail http://127.0.0.1:3000/health
 
 Die spaetere OpenAI-kompatible vLLM-API wird ueber den Hostnamen
 `host.docker.internal` angesprochen. Der Compose-Stack enthaelt dafuer bereits
-den lokalen Host-Gateway-Eintrag.
+den lokalen Host-Gateway-Eintrag. Fuer den Vast-Test ist die Base-URL
+`http://host.docker.internal:8000/v1` vorkonfiguriert. Sie ist nur erreichbar,
+solange der SSH-Tunnel auf der WSL-Docker-Bridge aktiv ist.

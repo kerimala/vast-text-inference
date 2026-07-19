@@ -13,6 +13,8 @@ services:
       WEBUI_URL: http://localhost:3000
       CORS_ALLOW_ORIGIN: http://localhost:3000
       ENABLE_SIGNUP: "true"
+      OPENAI_API_BASE_URLS: http://host.docker.internal:8000/v1
+      OPENAI_API_KEYS: local-vllm
     volumes:
       - open-webui-data:/app/backend/data
     healthcheck:
