@@ -1,0 +1,33 @@
+{
+  "profile": "aeon-bf16-a100-80gb",
+  "model_id": "AEON-7/Qwen3.6-27B-AEON-Ultimate-Uncensored-BF16",
+  "model_revision": "da9996c35307783ecaf25bdd240aeade954dd2c6",
+  "served_model_name": "aeon-qwen3.6-27b-bf16",
+  "container_image": "vllm/vllm-openai@sha256:3a1e7f5904e1a1192a02aa0086ceaffc33985d7044c7bb25b3a43d61bdbe3ac0",
+  "container_platform": "linux/amd64",
+  "disk_gb": 140,
+  "max_hourly_usd": 0.75,
+  "offer": {
+    "gpu_names": [
+      "A100 SXM4",
+      "A100 PCIE",
+      "A800 PCIE"
+    ],
+    "gpu_ram_min_mb": 80896,
+    "gpu_ram_max_mb": 83968,
+    "num_gpus": 1,
+    "cpu_arch": "amd64",
+    "reliability_min": 0.95,
+    "inet_down_min_mbps": 500,
+    "direct_port_count_min": 1,
+    "verified_required": false
+  },
+  "runtime": {
+    "max_model_len": 32768,
+    "max_num_seqs": 4,
+    "max_num_batched_tokens": 4096,
+    "gpu_memory_utilization": 0.86,
+    "startup_timeout_minutes": 35
+  },
+  "template_hash": null
+}
