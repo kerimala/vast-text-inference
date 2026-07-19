@@ -47,8 +47,9 @@ auf genau einer A100/A800 mit 80 GB VRAM.
 - Startkontext: 32K; keine spekulative Dekodierung
 - Endpoint: nur Remote-Loopback `127.0.0.1:8000`, Zugriff per SSH-Tunnel
 - Vast-Disk: 140 GB
-- Preisgrenze: 0,75 USD/Stunde inklusive des von Vast berechneten Storage-Anteils
-- Kostenvoranschlag beruecksichtigt zusaetzlich 55 GB erstmaligen Modelldownload
+- Preisgrenze: 0,95 USD/Stunde inklusive des von Vast berechneten Storage-Anteils
+- Kostenvoranschlag beruecksichtigt zusaetzlich 75 GB fuer Modell und einen
+  eventuell ungecachten Container
 - Nicht verifizierte Hosts sind erlaubt, Zuverlaessigkeit muss mindestens 95 % betragen
 - Privates Vast-Template: `aeon-bf16-a100-80gb`
 

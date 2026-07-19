@@ -33,7 +33,7 @@ class OfferValidationTests(unittest.TestCase):
         self.assertEqual(vast_lab.validate_offer(self.config, self.offer), [])
 
     def test_expensive_offer_is_rejected(self):
-        self.offer["dph_total"] = 0.76
+        self.offer["dph_total"] = self.config["max_hourly_usd"] + 0.01
         self.assertIn("Hourly price exceeds the cap", vast_lab.validate_offer(self.config, self.offer))
 
     def test_wrong_cpu_architecture_is_rejected(self):
@@ -47,8 +47,8 @@ class OfferValidationTests(unittest.TestCase):
     def test_quote_includes_first_model_download(self):
         quote = vast_lab.cost_quote(self.config, self.offer, 120)
         self.assertEqual(quote["estimated_rental_cost_usd"], 1.24)
-        self.assertEqual(quote["estimated_first_model_download_cost_usd"], 0.55)
-        self.assertEqual(quote["estimated_total_cost_usd"], 1.79)
+        self.assertEqual(quote["estimated_first_model_download_cost_usd"], 0.75)
+        self.assertEqual(quote["estimated_total_cost_usd"], 1.99)
 
 
 if __name__ == "__main__":
