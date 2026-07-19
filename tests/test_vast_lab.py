@@ -1,0 +1,55 @@
+import importlib.util
+import unittest
+from pathlib import Path
+
+
+MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "vast_lab.py"
+SPEC = importlib.util.spec_from_file_location("vast_lab", MODULE_PATH)
+vast_lab = importlib.util.module_from_spec(SPEC)
+assert SPEC.loader is not None
+SPEC.loader.exec_module(vast_lab)
+
+
+class OfferValidationTests(unittest.TestCase):
+    def setUp(self):
+        self.config = vast_lab.load_config(vast_lab.DEFAULT_CONFIG)
+        self.offer = {
+            "id": 42,
+            "machine_id": 7,
+            "gpu_name": "A100 SXM4",
+            "gpu_ram": 81920,
+            "num_gpus": 1,
+            "cpu_arch": "amd64",
+            "reliability": 0.98,
+            "inet_down": 1200,
+            "inet_down_cost": 0.01,
+            "direct_port_count": 2,
+            "disk_space": 500,
+            "dph_total": 0.62,
+            "verified": False,
+        }
+
+    def test_valid_unverified_offer_is_accepted(self):
+        self.assertEqual(vast_lab.validate_offer(self.config, self.offer), [])
+
+    def test_expensive_offer_is_rejected(self):
+        self.offer["dph_total"] = self.config["max_hourly_usd"] + 0.01
+        self.assertIn("Hourly price exceeds the cap", vast_lab.validate_offer(self.config, self.offer))
+
+    def test_wrong_cpu_architecture_is_rejected(self):
+        self.offer["cpu_arch"] = "arm64"
+        self.assertIn("CPU architecture differs", vast_lab.validate_offer(self.config, self.offer))
+
+    def test_wrong_gpu_is_rejected(self):
+        self.offer["gpu_name"] = "RTX 5090"
+        self.assertIn("GPU model is outside the allowlist", vast_lab.validate_offer(self.config, self.offer))
+
+    def test_quote_includes_first_model_download(self):
+        quote = vast_lab.cost_quote(self.config, self.offer, 120)
+        self.assertEqual(quote["estimated_rental_cost_usd"], 1.24)
+        self.assertEqual(quote["estimated_first_model_download_cost_usd"], 0.75)
+        self.assertEqual(quote["estimated_total_cost_usd"], 1.99)
+
+
+if __name__ == "__main__":
+    unittest.main()
