@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+
+*.key
+*.pem
+*.token
+
+runtime/
+secrets/
+artifacts/
+
