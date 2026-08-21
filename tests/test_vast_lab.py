@@ -106,6 +106,21 @@ class OrcaRouterFp8ProfileTests(unittest.TestCase):
         self.assertIn("serve --host 127.0.0.1 --port 3000", script)
         self.assertNotIn("--host 0.0.0.0", script)
 
+    def test_openwebui_web_search_is_keyless_and_smoke_tested(self):
+        script = FP8_PROVISIONING_PATH.read_text(encoding="utf-8")
+        self.assertIn("export ENABLE_WEB_SEARCH=true", script)
+        self.assertIn('readonly WEB_SEARCH_ENGINE="duckduckgo"', script)
+        self.assertIn("export DDGS_BACKEND=auto", script)
+        self.assertIn("export WEB_SEARCH_RESULT_COUNT=", script)
+        self.assertIn("export WEB_SEARCH_CONCURRENT_REQUESTS=", script)
+        self.assertIn("export BYPASS_WEB_SEARCH_WEB_LOADER=false", script)
+        self.assertIn("export ENABLE_WEB_LOADER_SSL_VERIFICATION=true", script)
+        self.assertIn("from ddgs import DDGS", script)
+        self.assertIn("for _ in $(seq 1 3)", script)
+        self.assertIn("if web_search_ok; then", script)
+        self.assertIn("testing-web-search", script)
+        self.assertNotIn("SEARCH_API_KEY", script)
+
 
 if __name__ == "__main__":
     unittest.main()

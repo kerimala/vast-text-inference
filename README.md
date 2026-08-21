@@ -77,6 +77,12 @@ auf genau einer nativen FP8-GPU mit 48 GB VRAM.
   behalten
 - Open WebUI: `0.10.2`, in einem separaten Python-Venv innerhalb der
   Vast-Instanz
+- Websuche: global aktiviert ueber das in Open WebUI enthaltene
+  DDGS/DuckDuckGo-Backend; fuenf Ergebnisse, zwei parallele Such- und
+  Loader-Anfragen, TLS-Pruefung aktiv und keine Search-API-Keys erforderlich
+- Das Provisioning markiert die Instanz erst dann als bereit, wenn neben vLLM
+  und Open WebUI auch eine echte DDGS-Suchanfrage mindestens ein Ergebnis
+  geliefert hat.
 - Remote-Ports: nur Loopback `127.0.0.1:8000` fuer vLLM und
   `127.0.0.1:3000` fuer Open WebUI
 - Vast-Disk: 120 GB
@@ -152,6 +158,11 @@ Test-Baseline keinen extern exponierten Port.
 Beim Qwen3.8-Profil enthaelt der ausgegebene SSH-Befehl zwei Forwardings. Danach
 sind vLLM unter `http://127.0.0.1:8000/v1` und die auf Vast laufende Open WebUI
 unter `http://127.0.0.1:3000` erreichbar.
+
+Die Websuche ist serverweit vorkonfiguriert. Im Chat muss der Nutzer nur noch
+den Websuche-Schalter aktivieren; Qwen3.8 verwendet sie dann als natives Tool.
+Die Suche und das Laden der Treffer laufen auf der Vast-Instanz. Es werden
+keine Suchanbieter-Schluessel im Repository, Template oder Browser benoetigt.
 
 Fuer privaten Handy-Zugriff kann der Windows-Tower ausschliesslich innerhalb
 des Tailnets per Tailscale Serve auf den lokalen UI-Tunnel weiterleiten, zum

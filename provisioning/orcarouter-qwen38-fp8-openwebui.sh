@@ -18,6 +18,9 @@ readonly OPENWEBUI_LOG="${LOG_DIR}/openwebui.log"
 readonly STATUS_FILE="${STATE_DIR}/status"
 readonly VLLM_PID_FILE="${STATE_DIR}/vllm.pid"
 readonly OPENWEBUI_PID_FILE="${STATE_DIR}/openwebui.pid"
+readonly WEB_SEARCH_ENGINE="duckduckgo"
+readonly WEB_SEARCH_RESULT_COUNT="5"
+readonly WEB_SEARCH_CONCURRENT_REQUESTS="2"
 
 mkdir -p "${MODEL_DIR}" "${OPENWEBUI_DATA_DIR}" "${STATE_DIR}" "${LOG_DIR}"
 exec > >(tee -a "${LOG_DIR}/provisioning.log") 2>&1
@@ -42,6 +45,16 @@ try:
     with urllib.request.urlopen(sys.argv[1], timeout=3) as response:
         raise SystemExit(0 if response.status == 200 else 1)
 except (urllib.error.URLError, TimeoutError):
+    raise SystemExit(1)
+PY
+}
+
+web_search_ok() {
+  "${OPENWEBUI_VENV}/bin/python" - <<'PY'
+from ddgs import DDGS
+
+results = DDGS().text("Open WebUI project", max_results=1)
+if not results or not results[0].get("href"):
     raise SystemExit(1)
 PY
 }
@@ -156,6 +169,18 @@ cors_allow_origin="${webui_url};http://127.0.0.1:3000;http://localhost:3000"
   export OPENAI_API_KEYS="local-vllm"
   export ENABLE_OLLAMA_API=false
   export DEFAULT_USER_ROLE=pending
+  export ENABLE_WEB_SEARCH=true
+  export ENABLE_WEB_SEARCH_CONFIRMATION=false
+  export WEB_SEARCH_ENGINE="${WEB_SEARCH_ENGINE}"
+  export WEB_SEARCH_RESULT_COUNT="${WEB_SEARCH_RESULT_COUNT}"
+  export WEB_SEARCH_CONCURRENT_REQUESTS="${WEB_SEARCH_CONCURRENT_REQUESTS}"
+  export DDGS_BACKEND=auto
+  export BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL=false
+  export BYPASS_WEB_SEARCH_WEB_LOADER=false
+  export WEB_LOADER_CONCURRENT_REQUESTS=2
+  export WEB_LOADER_TIMEOUT=20
+  export ENABLE_WEB_LOADER_SSL_VERIFICATION=true
+  export USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36"
   export DO_NOT_TRACK=true
   export SCARF_NO_ANALYTICS=true
   export ANONYMIZED_TELEMETRY=false
@@ -178,14 +203,27 @@ for _ in $(seq 1 120); do
   fi
 
   if http_ok "http://127.0.0.1:3000/health"; then
+    break
+  fi
+  sleep 10
+done
+
+if ! http_ok "http://127.0.0.1:3000/health"; then
+  printf 'Open WebUI did not become healthy within 20 minutes.\n'
+  tail -n 120 "${OPENWEBUI_LOG}" || true
+  false
+fi
+
+printf 'testing-web-search\n' >"${STATUS_FILE}"
+for _ in $(seq 1 3); do
+  if web_search_ok; then
     printf 'ready\n' >"${STATUS_FILE}"
     touch "${STATE_DIR}/ready"
-    printf 'vLLM and Open WebUI are healthy on remote loopback ports 8000 and 3000.\n'
+    printf 'vLLM, Open WebUI and keyless DuckDuckGo web search are healthy.\n'
     exit 0
   fi
   sleep 10
 done
 
-printf 'Open WebUI did not become healthy within 20 minutes.\n'
-tail -n 120 "${OPENWEBUI_LOG}" || true
+printf 'DuckDuckGo web search did not return a result after three attempts.\n'
 false
