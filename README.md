@@ -72,7 +72,9 @@ auf genau einer nativen FP8-GPU mit 48 GB VRAM.
 - Modellrevision: `0787858da83e6640e289c0c22d092d92f4e97fdb`
 - Container: vLLM `v0.24.0`, gepinnt auf den `linux/amd64`-Digest
 - GPU-Allowlist: RTX 6000 Ada, RTX 5880 Ada oder L40S
-- Startkontext: 32K, FP8-KV-Cache und MTP mit drei spekulativen Tokens
+- Startkontext: 32K und FP8-KV-Cache. MTP ist bewusst deaktiviert, weil die
+  Kombination aus spekulativer Dekodierung und erzwungenen Tool-Calls in der
+  gepinnten vLLM-Version den xgrammar-Decoder zum Abbruch bringen kann.
 - Textbetrieb: `--language-model-only`, um auf 48 GB belastbare KV-Reserve zu
   behalten
 - Open WebUI: `0.10.2`, in einem separaten Python-Venv innerhalb der
@@ -85,6 +87,9 @@ auf genau einer nativen FP8-GPU mit 48 GB VRAM.
   geliefert hat.
 - Remote-Ports: nur Loopback `127.0.0.1:8000` fuer vLLM und
   `127.0.0.1:3000` fuer Open WebUI
+- Der OpenAI-kompatible Endpoint wurde mit normalem Chat und einem erzwungenen
+  Function-Call getestet; damit kann er auch von Hermes-aehnlichen Clients
+  ueber den privaten SSH-Tunnel verwendet werden.
 - Vast-Disk: 120 GB
 - Preisgrenze: 0,85 USD/Stunde inklusive Storage-Anteil
 - Privates Vast-Template: `qwen38-orcarouter-uncensored-fp8-openwebui-48gb`
