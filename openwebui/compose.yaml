@@ -10,11 +10,27 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      WEBUI_URL: http://localhost:3000
-      CORS_ALLOW_ORIGIN: http://localhost:3000
-      ENABLE_SIGNUP: "true"
+      WEBUI_URL: https://desktop-kdh6ecm.tail5a261a.ts.net:9443
+      CORS_ALLOW_ORIGIN: https://desktop-kdh6ecm.tail5a261a.ts.net:9443
+      ENABLE_SIGNUP: "false"
       OPENAI_API_BASE_URLS: http://host.docker.internal:8000/v1
       OPENAI_API_KEYS: local-vllm
+      ENABLE_WEB_SEARCH: "true"
+      WEB_SEARCH_ENGINE: duckduckgo
+      DDGS_BACKEND: auto
+      WEB_SEARCH_RESULT_COUNT: "5"
+      WEB_SEARCH_CONCURRENT_REQUESTS: "2"
+      BYPASS_WEB_SEARCH_WEB_LOADER: "false"
+      WEB_LOADER_CONCURRENT_REQUESTS: "2"
+      WEB_LOADER_TIMEOUT: "20"
+      ENABLE_WEB_LOADER_SSL_VERIFICATION: "true"
+      AUDIO_STT_ENGINE: ""
+      WHISPER_MODEL: small
+      WHISPER_COMPUTE_TYPE: int8
+      WHISPER_MULTILINGUAL: "true"
+      WHISPER_MODEL_AUTO_UPDATE: "false"
+      WHISPER_VAD_FILTER: "true"
+      AUDIO_STT_ALLOWED_EXTENSIONS: mp3,wav,m4a,webm,ogg,flac,mp4,mpga,mpeg
     volumes:
       - open-webui-data:/app/backend/data
     healthcheck:
