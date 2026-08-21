@@ -102,7 +102,7 @@ class OrcaRouterFp8ProfileTests(unittest.TestCase):
         self.assertIn(f'OPENWEBUI_VERSION="{self.config["openwebui_version"]}"', script)
         self.assertIn("--language-model-only", script)
         self.assertIn("--kv-cache-dtype fp8", script)
-        self.assertIn("--speculative-config", script)
+        self.assertNotIn("--speculative-config", script)
         self.assertIn("serve --host 127.0.0.1 --port 3000", script)
         self.assertNotIn("--host 0.0.0.0", script)
 

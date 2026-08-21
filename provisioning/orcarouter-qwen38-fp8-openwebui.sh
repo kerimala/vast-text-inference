@@ -102,7 +102,6 @@ nohup vllm serve "${MODEL_DIR}" \
   --host 127.0.0.1 \
   --port 8000 \
   --language-model-only \
-  --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
   --kv-cache-dtype fp8 \
   --max-model-len 32768 \
   --max-num-seqs 4 \
