@@ -109,7 +109,11 @@ class OrcaRouterFp8ProfileTests(unittest.TestCase):
     def test_openwebui_web_search_is_keyless_and_smoke_tested(self):
         script = FP8_PROVISIONING_PATH.read_text(encoding="utf-8")
         self.assertIn("export ENABLE_WEB_SEARCH=true", script)
-        self.assertIn('readonly WEB_SEARCH_ENGINE="duckduckgo"', script)
+        self.assertIn('readonly OPENWEBUI_WEB_SEARCH_ENGINE="duckduckgo"', script)
+        self.assertIn(
+            'export WEB_SEARCH_ENGINE="${OPENWEBUI_WEB_SEARCH_ENGINE}"',
+            script,
+        )
         self.assertIn("export DDGS_BACKEND=auto", script)
         self.assertIn("export WEB_SEARCH_RESULT_COUNT=", script)
         self.assertIn("export WEB_SEARCH_CONCURRENT_REQUESTS=", script)
@@ -120,6 +124,12 @@ class OrcaRouterFp8ProfileTests(unittest.TestCase):
         self.assertIn("if web_search_ok; then", script)
         self.assertIn("testing-web-search", script)
         self.assertNotIn("SEARCH_API_KEY", script)
+
+    def test_remote_failed_marker_aborts_wait_immediately(self):
+        helper = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertIn("state/failed; then exit 42", helper)
+        self.assertIn('probe.returncode == 42', helper)
+        self.assertIn('Remote provisioning reported failure.', helper)
 
 
 if __name__ == "__main__":

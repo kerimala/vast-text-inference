@@ -246,10 +246,13 @@ def wait_for_ready(instance_id: int, timeout_minutes: int, ssh_key: Path) -> str
                     "-o",
                     "StrictHostKeyChecking=accept-new",
                     host_part,
+                    "if test -f /workspace/vast-text-inference/state/failed; then exit 42; fi; "
                     "test -f /workspace/vast-text-inference/state/ready",
                 ],
                 check=False,
             )
+            if probe.returncode == 42:
+                raise LabError("Remote provisioning reported failure.")
             if probe.returncode == 0:
                 return ssh_url
         time.sleep(15)
