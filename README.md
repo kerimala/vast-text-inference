@@ -4,10 +4,13 @@ Reproduzierbare, kostenkontrollierte Text-Inference-Tests auf Vast.ai.
 
 ## Aktueller Stand
 
-- Open WebUI laeuft lokal in WSL und ist nur unter `http://localhost:3000` erreichbar.
-- Die Open-WebUI-Daten liegen in einem persistenten Docker-Volume.
+- Die lokale Open-WebUI-Baseline in WSL bleibt fuer dauerhafte Accounts und
+  Chats erhalten.
+- Das Qwen3.8-FP8-Profil startet zusaetzlich eine eigene, ephemere Open-WebUI-
+  Instanz auf dem gemieteten Vast-Host.
 - Vast CLI wird lokal in WSL ausgefuehrt.
-- Vast-Instanzen und Modell-Endpoints werden erst in einer spaeteren Phase erstellt.
+- Modell-API und Vast-Open-WebUI binden nur an Remote-Loopback und werden per
+  SSH-Tunnel erreicht; es gibt keine oeffentlichen Modell- oder UI-Ports.
 
 ## Open WebUI
 
@@ -32,7 +35,7 @@ lokalen Open-WebUI-Daten erhalten bleiben sollen.
 
 - Keine API Keys, Tokens oder SSH-Schluessel in diesem Repository speichern.
 - Open WebUI bleibt an `127.0.0.1` gebunden.
-- Der spaetere vLLM-Endpoint wird ueber einen SSH-Tunnel erreicht.
+- vLLM und die optionale Vast-Open-WebUI werden ueber einen SSH-Tunnel erreicht.
 - Provisioning-Skripte werden von einer festen Git-Revision geladen.
 - Eine Vast-Instanz wird nur mit Preisgrenze, Startup-Timeout und Cleanup-Guard erstellt.
 
@@ -58,10 +61,46 @@ native FP4-Beschleunigung. Der vom Modellautor empfohlene AEON-Container ist
 zudem nur fuer `linux/arm64` publiziert; das Template nutzt daher den offiziellen
 `linux/amd64`-Build von vLLM.
 
+## Qwen3.8 OrcaRouter FP8 mit Open WebUI auf Vast
+
+Das zweite Profil ist
+[`orcarouter/Qwen3.8-27B-Uncensored-FP8`](https://huggingface.co/orcarouter/Qwen3.8-27B-Uncensored-FP8)
+auf genau einer nativen FP8-GPU mit 48 GB VRAM.
+
+- Profil: `config/orcarouter-qwen38-fp8-openwebui.json`
+- Provisioning: `provisioning/orcarouter-qwen38-fp8-openwebui.sh`
+- Modellrevision: `0787858da83e6640e289c0c22d092d92f4e97fdb`
+- Container: vLLM `v0.24.0`, gepinnt auf den `linux/amd64`-Digest
+- GPU-Allowlist: RTX 6000 Ada, RTX 5880 Ada oder L40S
+- Startkontext: 32K, FP8-KV-Cache und MTP mit drei spekulativen Tokens
+- Textbetrieb: `--language-model-only`, um auf 48 GB belastbare KV-Reserve zu
+  behalten
+- Open WebUI: `0.10.2`, in einem separaten Python-Venv innerhalb der
+  Vast-Instanz
+- Remote-Ports: nur Loopback `127.0.0.1:8000` fuer vLLM und
+  `127.0.0.1:3000` fuer Open WebUI
+- Vast-Disk: 120 GB
+- Preisgrenze: 0,85 USD/Stunde inklusive Storage-Anteil
+- Privates Vast-Template: `qwen38-orcarouter-uncensored-fp8-openwebui-48gb`
+
+Das Modell-Repository ist zugangsbeschraenkt. `HF_TOKEN` muss beim Deployment
+aus einer lokalen Secret-Quelle an Vast uebergeben werden; der Token gehoert
+weder in Git noch in das private Template. Das Provisioning bricht ohne Token
+fail-closed ab.
+
+Open-WebUI-Accounts und Chats dieses Profils liegen unter `/workspace` der
+Vast-Instanz. Sie ueberleben einen normalen Stop/Start derselben Instanz, aber
+nicht deren Zerstoerung. Fuer dauerhafte Chats bleibt die lokale
+Open-WebUI-Baseline die bessere Ablage.
+
 ## Angebote suchen (kostenfrei)
 
 ```bash
 python3 scripts/vast_lab.py search
+
+python3 scripts/vast_lab.py \
+  --config config/orcarouter-qwen38-fp8-openwebui.json \
+  search
 ```
 
 Das Ergebnis ist nur ein Snapshot. Vor einer Miete wird das ausgewaehlte
@@ -77,6 +116,15 @@ python3 scripts/vast_lab.py quote MACHINE_ID --ttl-minutes 120
 
 python3 scripts/vast_lab.py deploy MACHINE_ID \
   --ttl-minutes 120 \
+  --confirm 'RENT MACHINE MACHINE_ID UP TO USD BETRAG' \
+  --execute
+
+python3 scripts/vast_lab.py \
+  --config config/orcarouter-qwen38-fp8-openwebui.json \
+  deploy MACHINE_ID \
+  --ttl-minutes 240 \
+  --hf-token-file ~/.cache/huggingface/token \
+  --webui-public-url 'https://WINDOWS-NODE.TAILNET.ts.net:9443' \
   --confirm 'RENT MACHINE MACHINE_ID UP TO USD BETRAG' \
   --execute
 ```
@@ -100,3 +148,21 @@ Open WebUI verwendet danach als OpenAI-kompatible Basis-URL
 `http://host.docker.internal:8000/v1`. Ein beliebiger nicht-leerer lokaler
 API-Key kann in Open WebUI gesetzt werden; vLLM selbst bekommt in dieser
 Test-Baseline keinen extern exponierten Port.
+
+Beim Qwen3.8-Profil enthaelt der ausgegebene SSH-Befehl zwei Forwardings. Danach
+sind vLLM unter `http://127.0.0.1:8000/v1` und die auf Vast laufende Open WebUI
+unter `http://127.0.0.1:3000` erreichbar.
+
+Fuer privaten Handy-Zugriff kann der Windows-Tower ausschliesslich innerhalb
+des Tailnets per Tailscale Serve auf den lokalen UI-Tunnel weiterleiten, zum
+Beispiel auf einem freien HTTPS-Port:
+
+```powershell
+tailscale serve --bg --https=9443 http://127.0.0.1:3000
+tailscale serve status
+```
+
+Das Handy muss mit demselben Tailnet verbunden sein. Tailscale Funnel und
+Router-Portweiterleitungen bleiben deaktiviert. Nach dem ersten Open-WebUI-
+Account wird die Registrierung geschlossen; weitere Nutzer bleiben mindestens
+im Status `pending`.

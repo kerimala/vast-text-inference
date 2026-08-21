@@ -4,6 +4,9 @@ from pathlib import Path
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "vast_lab.py"
+REPO_ROOT = MODULE_PATH.parents[1]
+FP8_CONFIG_PATH = REPO_ROOT / "config" / "orcarouter-qwen38-fp8-openwebui.json"
+FP8_PROVISIONING_PATH = REPO_ROOT / "provisioning" / "orcarouter-qwen38-fp8-openwebui.sh"
 SPEC = importlib.util.spec_from_file_location("vast_lab", MODULE_PATH)
 vast_lab = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -49,6 +52,59 @@ class OfferValidationTests(unittest.TestCase):
         self.assertEqual(quote["estimated_rental_cost_usd"], 1.24)
         self.assertEqual(quote["estimated_first_model_download_cost_usd"], 0.75)
         self.assertEqual(quote["estimated_total_cost_usd"], 1.99)
+
+
+class OrcaRouterFp8ProfileTests(unittest.TestCase):
+    def setUp(self):
+        self.config = vast_lab.load_config(FP8_CONFIG_PATH)
+        self.offer = {
+            "id": 84,
+            "machine_id": 9,
+            "gpu_name": "RTX 6000Ada",
+            "gpu_ram": 49140,
+            "num_gpus": 1,
+            "cpu_arch": "amd64",
+            "compute_cap": 890,
+            "reliability": 0.999,
+            "inet_down": 600,
+            "inet_down_cost": 0.0026041666666666665,
+            "direct_port_count": 16,
+            "disk_space": 500,
+            "dph_total": 0.63,
+            "verified": True,
+        }
+
+    def test_native_fp8_ada_offer_is_accepted(self):
+        self.assertEqual(vast_lab.validate_offer(self.config, self.offer), [])
+
+    def test_live_verification_shape_is_accepted(self):
+        self.offer.pop("verified")
+        self.offer["verification"] = "verified"
+        self.offer["vericode"] = 1
+        self.assertEqual(vast_lab.validate_offer(self.config, self.offer), [])
+
+    def test_ampere_compute_capability_is_rejected(self):
+        self.offer["compute_cap"] = 860
+        self.assertIn(
+            "GPU compute capability is too low",
+            vast_lab.validate_offer(self.config, self.offer),
+        )
+
+    def test_four_hour_quote_includes_model_download(self):
+        quote = vast_lab.cost_quote(self.config, self.offer, 240)
+        self.assertEqual(quote["estimated_rental_cost_usd"], 2.52)
+        self.assertEqual(quote["estimated_first_model_download_cost_usd"], 0.09)
+        self.assertEqual(quote["estimated_total_cost_usd"], 2.61)
+
+    def test_provisioning_is_pinned_and_loopback_only(self):
+        script = FP8_PROVISIONING_PATH.read_text(encoding="utf-8")
+        self.assertIn(self.config["model_revision"], script)
+        self.assertIn(f'OPENWEBUI_VERSION="{self.config["openwebui_version"]}"', script)
+        self.assertIn("--language-model-only", script)
+        self.assertIn("--kv-cache-dtype fp8", script)
+        self.assertIn("--speculative-config", script)
+        self.assertIn("serve --host 127.0.0.1 --port 3000", script)
+        self.assertNotIn("--host 0.0.0.0", script)
 
 
 if __name__ == "__main__":

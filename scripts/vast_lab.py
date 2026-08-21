@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cost-gated Vast.ai search and deployment helper for the AEON BF16 baseline."""
+"""Cost-gated Vast.ai search and deployment helper for pinned model profiles."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +19,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = REPO_ROOT / "config" / "aeon-bf16-a100.json"
 DEFAULT_SSH_KEY = Path.home() / ".ssh" / "vast_ai_ed25519"
+DEFAULT_HF_TOKEN_FILE = Path.home() / ".cache" / "huggingface" / "token"
 TERMINAL_FAILURE_STATES = {"error", "exited", "offline"}
 
 
@@ -29,16 +32,45 @@ def load_config(path: Path) -> dict[str, Any]:
         return json.load(handle)
 
 
+def verify_hf_access(config: dict[str, Any], token: str) -> None:
+    model_id = config["model_id"]
+    revision = config["model_revision"]
+    url = f"https://huggingface.co/{model_id}/resolve/{revision}/config.json"
+    request = urllib.request.Request(
+        url,
+        headers={"Authorization": f"Bearer {token}"},
+        method="HEAD",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            if response.status != 200:
+                raise LabError(f"Hugging Face access check returned HTTP {response.status}.")
+    except urllib.error.HTTPError as exc:
+        raise LabError(f"Hugging Face access check returned HTTP {exc.code}.") from exc
+    except urllib.error.URLError as exc:
+        raise LabError(f"Hugging Face access check failed: {exc.reason}") from exc
+
+
 def run(command: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, check=check, text=True, capture_output=True)
 
 
-def vast_json(arguments: list[str]) -> Any:
-    result = run(["vastai", *arguments, "--raw"])
+def vast_json(arguments: list[str], *, sensitive_values: tuple[str, ...] = ()) -> Any:
+    result = run(["vastai", *arguments, "--raw"], check=False)
+    if result.returncode != 0:
+        diagnostic = (result.stderr or result.stdout or "unknown error").strip()[:500]
+        for value in sensitive_values:
+            if value:
+                diagnostic = diagnostic.replace(value, "<redacted>")
+        raise LabError(f"Vast CLI failed: {diagnostic}")
     try:
         return json.loads(result.stdout)
     except json.JSONDecodeError as exc:
-        raise LabError(f"Vast CLI returned invalid JSON: {result.stdout[:300]}") from exc
+        diagnostic = result.stdout[:300]
+        for value in sensitive_values:
+            if value:
+                diagnostic = diagnostic.replace(value, "<redacted>")
+        raise LabError(f"Vast CLI returned invalid JSON: {diagnostic}") from exc
 
 
 def offer_query(config: dict[str, Any]) -> str:
@@ -57,6 +89,8 @@ def offer_query(config: dict[str, Any]) -> str:
     ]
     if rules["verified_required"]:
         comparisons.append("verified=true")
+    if rules.get("compute_cap_min") is not None:
+        comparisons.append(f"compute_cap>={rules['compute_cap_min']}")
     return " ".join(comparisons)
 
 
@@ -99,6 +133,8 @@ def validate_offer(config: dict[str, Any], offer: dict[str, Any]) -> list[str]:
         failures.append("GPU RAM differs")
     if offer.get("cpu_arch") != rules["cpu_arch"]:
         failures.append("CPU architecture differs")
+    if float(offer.get("compute_cap") or 0) < float(rules.get("compute_cap_min") or 0):
+        failures.append("GPU compute capability is too low")
     if float(offer.get("reliability") or 0) < rules["reliability_min"]:
         failures.append("Reliability is too low")
     if float(offer.get("inet_down") or 0) < rules["inet_down_min_mbps"]:
@@ -109,12 +145,22 @@ def validate_offer(config: dict[str, Any], offer: dict[str, Any]) -> list[str]:
         failures.append("Not enough disk")
     if hourly_price(offer) > config["max_hourly_usd"]:
         failures.append("Hourly price exceeds the cap")
-    if rules["verified_required"] and not offer.get("verified"):
+    is_verified = (
+        bool(offer.get("verified"))
+        or offer.get("verification") == "verified"
+        or offer.get("vericode") == 1
+    )
+    if rules["verified_required"] and not is_verified:
         failures.append("Host is not verified")
     return failures
 
 
 def public_offer(offer: dict[str, Any]) -> dict[str, Any]:
+    is_verified = (
+        bool(offer.get("verified"))
+        or offer.get("verification") == "verified"
+        or offer.get("vericode") == 1
+    )
     return {
         "offer_id": offer.get("id"),
         "machine_id": offer.get("machine_id"),
@@ -122,7 +168,7 @@ def public_offer(offer: dict[str, Any]) -> dict[str, Any]:
         "gpu_ram_mb": offer.get("gpu_ram"),
         "hourly_usd_with_storage": round(hourly_price(offer), 4),
         "reliability": offer.get("reliability"),
-        "verified": offer.get("verified"),
+        "verified": is_verified,
         "inet_down_mbps": offer.get("inet_down"),
         "direct_port_count": offer.get("direct_port_count"),
         "disk_space_gb": offer.get("disk_space"),
@@ -265,6 +311,22 @@ def command_deploy(config: dict[str, Any], args: argparse.Namespace) -> int:
     if not config.get("template_hash"):
         raise LabError("No Vast template hash is recorded in the profile yet.")
 
+    hf_token = ""
+    if config.get("requires_hf_token"):
+        token_file = args.hf_token_file.expanduser()
+        if not token_file.is_file():
+            raise LabError(f"Hugging Face token file is missing: {token_file}")
+        hf_token = token_file.read_text(encoding="utf-8").strip()
+        if not hf_token:
+            raise LabError(f"Hugging Face token file is empty: {token_file}")
+        verify_hf_access(config, hf_token)
+
+    if config.get("runtime", {}).get("openwebui_port") is not None:
+        if not args.webui_public_url:
+            raise LabError("--webui-public-url is required for an Open WebUI profile.")
+        if not args.webui_public_url.startswith("https://"):
+            raise LabError("--webui-public-url must use HTTPS.")
+
     offer = selected_offer(config, args.machine_id)
     quote = cost_quote(config, offer, args.ttl_minutes)
     if args.confirm != quote["required_confirmation"]:
@@ -273,20 +335,26 @@ def command_deploy(config: dict[str, Any], args: argparse.Namespace) -> int:
     print(json.dumps(public_offer(offer), indent=2))
     print(json.dumps(quote, indent=2))
     print("Local TTL guard will be armed immediately after creation.")
-    created = vast_json(
-        [
-            "create",
-            "instance",
-            str(offer["id"]),
-            "--template_hash",
-            str(config["template_hash"]),
-            "--disk",
-            str(config["disk_gb"]),
-            "--label",
-            config["profile"],
-            "--cancel-unavail",
-        ]
-    )
+    create_arguments = [
+        "create",
+        "instance",
+        str(offer["id"]),
+        "--template_hash",
+        str(config["template_hash"]),
+        "--disk",
+        str(config["disk_gb"]),
+        "--label",
+        config["profile"],
+        "--cancel-unavail",
+    ]
+    if hf_token:
+        docker_options = str(config.get("docker_options") or "").strip()
+        docker_options = f"{docker_options} -e HF_TOKEN={hf_token}".strip()
+        if args.webui_public_url:
+            docker_options = f"{docker_options} -e WEBUI_PUBLIC_URL={args.webui_public_url}"
+        create_arguments.extend(["--env", docker_options])
+    created = vast_json(create_arguments, sensitive_values=(hf_token,))
+    hf_token = ""
     instance_id = int(created.get("new_contract") or created.get("id") or 0)
     if not instance_id:
         raise LabError(f"Vast did not return an instance ID: {created}")
@@ -306,8 +374,17 @@ def command_deploy(config: dict[str, Any], args: argparse.Namespace) -> int:
 
     target = ssh_url.removeprefix("ssh://")
     host_part, _, port = target.rpartition(":")
+    runtime = config.get("runtime", {})
+    vllm_port = int(runtime.get("vllm_port", 8000))
+    openwebui_port = runtime.get("openwebui_port")
+    forwards = [f"-L {vllm_port}:127.0.0.1:{vllm_port}"]
+    if openwebui_port is not None:
+        openwebui_port = int(openwebui_port)
+        forwards.append(f"-L {openwebui_port}:127.0.0.1:{openwebui_port}")
     print("Ready. Keep this tunnel running:")
-    print(f"ssh -N -i {DEFAULT_SSH_KEY} -p {port} -L 8000:127.0.0.1:8000 {host_part}")
+    print(f"ssh -N -i {DEFAULT_SSH_KEY} -p {port} {' '.join(forwards)} {host_part}")
+    if openwebui_port is not None:
+        print(f"Open WebUI is tunneled to http://127.0.0.1:{openwebui_port}")
     print("Then run: python3 scripts/smoke_test.py")
     return 0
 
@@ -328,6 +405,8 @@ def build_parser() -> argparse.ArgumentParser:
     deploy_parser.add_argument("machine_id", type=int)
     deploy_parser.add_argument("--ttl-minutes", type=int, default=120)
     deploy_parser.add_argument("--confirm", required=True)
+    deploy_parser.add_argument("--hf-token-file", type=Path, default=DEFAULT_HF_TOKEN_FILE)
+    deploy_parser.add_argument("--webui-public-url")
     deploy_parser.add_argument("--execute", action="store_true")
     return parser
 
