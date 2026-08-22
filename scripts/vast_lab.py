@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -188,20 +189,28 @@ def arm_cleanup(instance_id: int, ttl_minutes: int) -> str:
     vastai_path = shutil.which("vastai")
     if not vastai_path:
         raise LabError("vastai is not available in PATH.")
-    result = run(
+    command = [
+        "systemd-run",
+        "--user",
+        f"--unit={unit}",
+        f"--on-active={ttl_minutes}m",
+    ]
+    # Keep account selection consistent for the delayed destroy command when
+    # deployment uses an isolated Vast CLI configuration (for example, the
+    # business account alongside an older private account).
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+    if xdg_config_home:
+        command.append(f"--setenv=XDG_CONFIG_HOME={xdg_config_home}")
+    command.extend(
         [
-            "systemd-run",
-            "--user",
-            f"--unit={unit}",
-            f"--on-active={ttl_minutes}m",
             vastai_path,
             "destroy",
             "instance",
             str(instance_id),
             "--yes",
-        ],
-        check=False,
+        ]
     )
+    result = run(command, check=False)
     if result.returncode != 0:
         raise LabError(f"Could not arm cleanup timer: {result.stderr.strip()}")
     return unit

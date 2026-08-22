@@ -1,6 +1,8 @@
 import importlib.util
+import os
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "vast_lab.py"
@@ -54,6 +56,21 @@ class OfferValidationTests(unittest.TestCase):
         self.assertEqual(quote["estimated_rental_cost_usd"], 1.24)
         self.assertEqual(quote["estimated_first_model_download_cost_usd"], 0.75)
         self.assertEqual(quote["estimated_total_cost_usd"], 1.99)
+
+    def test_cleanup_timer_preserves_isolated_vast_account_config(self):
+        completed = vast_lab.subprocess.CompletedProcess([], 0, "", "")
+        with (
+            patch.object(vast_lab.shutil, "which", return_value="/opt/vastai"),
+            patch.object(vast_lab, "run", return_value=completed) as run_mock,
+            patch.dict(os.environ, {"XDG_CONFIG_HOME": "/home/test/.config/vast-business"}),
+        ):
+            vast_lab.arm_cleanup(321, 210)
+        command = run_mock.call_args.args[0]
+        self.assertIn(
+            "--setenv=XDG_CONFIG_HOME=/home/test/.config/vast-business",
+            command,
+        )
+        self.assertEqual(command[-5:], ["/opt/vastai", "destroy", "instance", "321", "--yes"])
 
 
 class OrcaRouterFp8ProfileTests(unittest.TestCase):
@@ -156,6 +173,13 @@ class OrcaRouterHermes262KProfileTests(unittest.TestCase):
 
     def test_h100_nvl_offer_is_accepted(self):
         self.assertEqual(vast_lab.validate_offer(self.config, self.offer), [])
+
+    def test_business_template_is_recorded(self):
+        self.assertEqual(self.config["template_id"], 593378)
+        self.assertEqual(
+            self.config["template_hash"],
+            "b5f345296ea16ec994d599aa1e8e9eee",
+        )
 
     def test_a800_and_blackwell_workstation_are_rejected(self):
         self.offer["gpu_name"] = "A800 PCIE"

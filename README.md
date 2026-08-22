@@ -112,6 +112,11 @@ unveraendert und stellt den vollen Kontext auf einer einzelnen H100 NVL mit
 
 - Profil: `config/orcarouter-qwen38-fp8-hermes-262k-h100nvl.json`
 - Provisioning: `provisioning/orcarouter-qwen38-fp8-hermes-262k-h100nvl.sh`
+- Privates Business-Template: ID `593378`, Hash
+  `b5f345296ea16ec994d599aa1e8e9eee`.
+- Gepinnter Git-Commit: `97db9a88dba982d9f6769d1f97ffc4b12911b90b`;
+  das Template prueft die Provisioning-Datei vor dem Start gegen SHA-256
+  `84b383334ebb2ad57e58bef25166d4ccf17e62501905e1a0af93374ff1c54c2a`.
 - Modell und Revision entsprechen der gepinnten OrcaRouter-FP8-Baseline.
 - Hardware-Allowlist: genau eine verifizierte H100 NVL mit 90 bis 100 GB VRAM,
   mindestens 99 % Zuverlaessigkeit und mindestens 500 Mbit/s Download.
