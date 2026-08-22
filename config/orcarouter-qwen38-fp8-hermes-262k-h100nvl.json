@@ -1,0 +1,36 @@
+{
+  "profile": "qwen38-orcarouter-uncensored-fp8-hermes-262k-h100nvl",
+  "model_id": "orcarouter/Qwen3.8-27B-Uncensored-FP8",
+  "model_revision": "0787858da83e6640e289c0c22d092d92f4e97fdb",
+  "served_model_name": "qwen3.8-27b-uncensored-fp8-262k",
+  "container_image": "vllm/vllm-openai@sha256:f9de5cd9fa907fbf6dbba691eb7db095d48ad58ea283e3eba7142f9a91e186e8",
+  "container_platform": "linux/amd64",
+  "requires_hf_token": true,
+  "docker_options": "--ipc=host -e HF_HUB_DISABLE_TELEMETRY=1 -e PYTHONUNBUFFERED=1",
+  "disk_gb": 120,
+  "estimated_first_download_gb": 35,
+  "max_hourly_usd": 2.75,
+  "offer": {
+    "gpu_names": [
+      "H100 NVL"
+    ],
+    "gpu_ram_min_mb": 90000,
+    "gpu_ram_max_mb": 100000,
+    "num_gpus": 1,
+    "cpu_arch": "amd64",
+    "compute_cap_min": 900,
+    "reliability_min": 0.99,
+    "inet_down_min_mbps": 500,
+    "direct_port_count_min": 1,
+    "verified_required": true
+  },
+  "runtime": {
+    "max_model_len": 262144,
+    "max_num_seqs": 2,
+    "max_num_batched_tokens": 8192,
+    "gpu_memory_utilization": 0.92,
+    "startup_timeout_minutes": 75,
+    "vllm_port": 8000
+  },
+  "template_hash": ""
+}

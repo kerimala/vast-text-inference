@@ -104,6 +104,34 @@ Vast-Instanz. Sie ueberleben einen normalen Stop/Start derselben Instanz, aber
 nicht deren Zerstoerung. Fuer dauerhafte Chats bleibt die lokale
 Open-WebUI-Baseline die bessere Ablage.
 
+## Qwen3.8 OrcaRouter FP8 fuer Hermes mit 262K Kontext
+
+Das separate Hermes-Profil laesst die bewaehrte 48-GB-/32K-Baseline
+unveraendert und stellt den vollen Kontext auf einer einzelnen H100 NVL mit
+96 GB VRAM bereit.
+
+- Profil: `config/orcarouter-qwen38-fp8-hermes-262k-h100nvl.json`
+- Provisioning: `provisioning/orcarouter-qwen38-fp8-hermes-262k-h100nvl.sh`
+- Modell und Revision entsprechen der gepinnten OrcaRouter-FP8-Baseline.
+- Hardware-Allowlist: genau eine verifizierte H100 NVL mit 90 bis 100 GB VRAM,
+  mindestens 99 % Zuverlaessigkeit und mindestens 500 Mbit/s Download.
+- Preisgrenze: 2,75 USD/Stunde inklusive des von Vast berechneten
+  Storage-Anteils; 120 GB Disk und 35 GB Downloadreserve.
+- Runtime: 262.144 Tokens, FP8-KV-Cache, zwei Sequenzen, Chunked Prefill und
+  92 % GPU-Speichernutzung.
+- Hermes-Funktionen: OpenAI-kompatibler Chat, Reasoning und erzwungene
+  Function-Calls. Das Provisioning markiert die Instanz erst nach einem echten
+  Chat- und Tool-Call-Test als bereit.
+- MTP bleibt fuer die erste Hermes-Anbindung deaktiviert, weil der bisherige
+  vLLM-0.24.0-Test mit erzwungenen Tool-Calls ohne MTP stabil war.
+- Nur vLLM wird remote gestartet. Die persistente Open WebUI bleibt lokal;
+  der Modellendpunkt bindet ausschliesslich an `127.0.0.1:8000` und wird per
+  SSH-Tunnel ins Tailnet gebracht.
+
+Das Modell ist gated. Der vorhandene Hugging-Face-Zugang wurde fuer die
+gepinnten FP8-Dateien verifiziert; der Token wird weiterhin nur zur Laufzeit
+uebergeben und weder in Git noch im privaten Vast-Template gespeichert.
+
 ## Angebote suchen (kostenfrei)
 
 ```bash

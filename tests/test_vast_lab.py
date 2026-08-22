@@ -7,6 +7,8 @@ MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "vast_lab.py"
 REPO_ROOT = MODULE_PATH.parents[1]
 FP8_CONFIG_PATH = REPO_ROOT / "config" / "orcarouter-qwen38-fp8-openwebui.json"
 FP8_PROVISIONING_PATH = REPO_ROOT / "provisioning" / "orcarouter-qwen38-fp8-openwebui.sh"
+HERMES_262K_CONFIG_PATH = REPO_ROOT / "config" / "orcarouter-qwen38-fp8-hermes-262k-h100nvl.json"
+HERMES_262K_PROVISIONING_PATH = REPO_ROOT / "provisioning" / "orcarouter-qwen38-fp8-hermes-262k-h100nvl.sh"
 SPEC = importlib.util.spec_from_file_location("vast_lab", MODULE_PATH)
 vast_lab = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -130,6 +132,61 @@ class OrcaRouterFp8ProfileTests(unittest.TestCase):
         self.assertIn("state/failed; then exit 42", helper)
         self.assertIn('probe.returncode == 42', helper)
         self.assertIn('Remote provisioning reported failure.', helper)
+
+
+class OrcaRouterHermes262KProfileTests(unittest.TestCase):
+    def setUp(self):
+        self.config = vast_lab.load_config(HERMES_262K_CONFIG_PATH)
+        self.offer = {
+            "id": 126,
+            "machine_id": 29785,
+            "gpu_name": "H100 NVL",
+            "gpu_ram": 95830,
+            "num_gpus": 1,
+            "cpu_arch": "amd64",
+            "compute_cap": 900,
+            "reliability": 0.9996,
+            "inet_down": 860,
+            "inet_down_cost": 0.0000026041666666666666,
+            "direct_port_count": 16,
+            "disk_space": 500,
+            "dph_total": 2.3854,
+            "verified": True,
+        }
+
+    def test_h100_nvl_offer_is_accepted(self):
+        self.assertEqual(vast_lab.validate_offer(self.config, self.offer), [])
+
+    def test_a800_and_blackwell_workstation_are_rejected(self):
+        self.offer["gpu_name"] = "A800 PCIE"
+        self.offer["gpu_ram"] = 81920
+        self.offer["compute_cap"] = 800
+        self.assertIn("GPU model is outside the allowlist", vast_lab.validate_offer(self.config, self.offer))
+        self.offer["gpu_name"] = "RTX PRO 6000 WS"
+        self.offer["gpu_ram"] = 97887
+        self.offer["compute_cap"] = 1200
+        self.assertIn("GPU model is outside the allowlist", vast_lab.validate_offer(self.config, self.offer))
+
+    def test_full_context_runtime_is_pinned_for_hermes(self):
+        script = HERMES_262K_PROVISIONING_PATH.read_text(encoding="utf-8")
+        self.assertEqual(self.config["runtime"]["max_model_len"], 262144)
+        self.assertIn("--max-model-len 262144", script)
+        self.assertIn("--max-num-seqs 2", script)
+        self.assertIn("--kv-cache-dtype fp8", script)
+        self.assertIn("--language-model-only", script)
+        self.assertIn("--enable-chunked-prefill", script)
+        self.assertIn("--tool-call-parser qwen3_coder", script)
+        self.assertIn("--reasoning-parser qwen3", script)
+        self.assertNotIn("--speculative-config", script)
+        self.assertNotIn("open-webui", script.lower())
+        self.assertNotIn("--host 0.0.0.0", script)
+
+    def test_readiness_requires_chat_and_forced_tool_call(self):
+        script = HERMES_262K_PROVISIONING_PATH.read_text(encoding="utf-8")
+        self.assertIn("HERMES_262K_OK", script)
+        self.assertIn('"tool_choice": {"type": "function"', script)
+        self.assertIn("forced tool-call smoke test failed", script)
+        self.assertIn("testing-hermes-api", script)
 
 
 if __name__ == "__main__":
